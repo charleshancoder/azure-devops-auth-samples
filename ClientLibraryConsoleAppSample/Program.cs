@@ -1,6 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
-
+using Microsoft.TeamFoundation.Build.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Client;
@@ -11,7 +12,7 @@ namespace ClientLibraryConsoleAppSample
     class Program
     {
         //============= Config [Edit these with your settings] =====================
-        internal const string azureDevOpsOrganizationUrl = "https://dev.azure.com/organization"; //change to the URL of your Azure DevOps account; NOTE: This must use HTTPS
+        internal const string azureDevOpsOrganizationUrl = "https://dev.azure.com/rymanhealthcare"; //change to the URL of your Azure DevOps account; NOTE: This must use HTTPS
         // internal const string vstsCollectioUrl = "http://myserver:8080/tfs/DefaultCollection" alternate URL for a TFS collection
         //==========================================================================
 
@@ -21,23 +22,43 @@ namespace ClientLibraryConsoleAppSample
             //Prompt user for credential
             VssConnection connection = new VssConnection(new Uri(azureDevOpsOrganizationUrl), new VssClientCredentials());
 
-            //create http client and query for resutls
-            WorkItemTrackingHttpClient witClient = connection.GetClient<WorkItemTrackingHttpClient>();
-            Wiql query = new Wiql() { Query = "SELECT [Id], [Title], [State] FROM workitems WHERE [Work Item Type] = 'Bug' AND [Assigned To] = @Me" };
-            WorkItemQueryResult queryResults = witClient.QueryByWiqlAsync(query).Result;
+            
 
-            //Display reults in console
-            if (queryResults == null || queryResults.WorkItems.Count() == 0)
+            //create http client and query for resutls
+            var buildClient = connection.GetClient<BuildHttpClient>();
+            //List<BuildDefinitionReference> buildDefinitions = new List<BuildDefinitionReference>();
+
+            // Iterate (as needed) to get the full set of build definitions
+            //string continuationToken = null;
+            //do
+            //{
+            //    IPagedList<BuildDefinitionReference> buildDefinitionsPage = buildClient.GetDefinitionsAsync2(
+            //        project: "MyRyman Development",
+            //        continuationToken: continuationToken).Result;
+
+            //    buildDefinitions.AddRange(buildDefinitionsPage);
+
+            //    continuationToken = buildDefinitionsPage.ContinuationToken;
+            //} while (!string.IsNullOrEmpty(continuationToken));
+
+            //// Show the build definitions
+            //foreach (BuildDefinitionReference definition in buildDefinitions)
+            //{
+            //    Console.WriteLine("{0} {1}", definition.Id.ToString().PadLeft(6), definition.Name);
+            //}
+
+            var buildsResult = buildClient.GetBuildsAsync2("MyRyman Development",
+                definitions: new List<int> { 95 },
+                reasonFilter: BuildReason.PullRequest).Result;
+
+            foreach(var build in buildsResult.Where(b => b.SourceBranch.Contains("495")))
             {
-                Console.WriteLine("Query did not find any results");
+                Console.WriteLine("{0} {1} {2}", build.SourceBranch, build.BuildNumber, build.Result.Value);
             }
-            else
-            {
-                foreach (var item in queryResults.WorkItems)
-                {
-                    Console.WriteLine(item.Id);
-                }
-            }
+
+            Console.WriteLine("Total Failed {0}", buildsResult.Count(b => b.Result.Value == BuildResult.Failed));
+            
+            Console.ReadKey();
         }
     }
 }
